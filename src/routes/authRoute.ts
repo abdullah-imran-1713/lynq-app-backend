@@ -3,9 +3,20 @@ import { authController } from '../controllers/authcontroller';
 
 const router = express.Router();
 
-router.get('/google/url', authController.getGoogleAuthUrl);
-router.post('/google/callback', authController.googleCallback);
-router.post('/send-verification', authController.sendVerificationCode);
+// ===================================
+// AUTHENTICATION ROUTES
+// ===================================
+
+// Signup - email + password → OTP
+router.post('/signup', authController.signup);
+
+// Login - email + password → verify → OTP
+router.post('/login', authController.login);
+
+// Verify OTP (for both signup and login)
 router.post('/verify-code', authController.verifyCode);
+
+// Resend OTP
+router.post('/resend-code', authController.resendCode);
 
 export default router;

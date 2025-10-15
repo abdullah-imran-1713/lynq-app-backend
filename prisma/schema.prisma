@@ -1,0 +1,42 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================================
+// USER MODEL
+// ===================================
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String    // Hashed password
+  name          String?
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("users")
+  @@index([email])
+}
+
+// ===================================
+// VERIFICATION CODE MODEL
+// ===================================
+model VerificationCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  purpose   String   // "signup" or "login"
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@map("verification_codes")
+  @@index([email])
+  @@index([code])
+}

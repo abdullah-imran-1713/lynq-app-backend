@@ -1,15 +1,38 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 
-// Load environment variables first
+// Load environment variables
 dotenv.config();
 
-// Validate API key exists
-if (!process.env.RESEND_API_KEY) {
-  throw new Error('RESEND_API_KEY is not defined in environment variables');
+// Validate Gmail credentials
+if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+  console.error('❌ Gmail credentials missing in .env file!');
+  throw new Error(
+    'GMAIL_USER and GMAIL_APP_PASSWORD must be set in environment variables'
+  );
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+console.log('📧 Email Service Configuration:');
+console.log('Gmail User:', process.env.GMAIL_USER);
+console.log('App Password exists:', !!process.env.GMAIL_APP_PASSWORD);
+
+// Create Gmail transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD, // 16-digit app password
+  },
+});
+
+// Verify transporter configuration on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ Gmail transporter verification failed:', error);
+  } else {
+    console.log('✅ Gmail transporter is ready to send emails!');
+  }
+});
 
 interface SendVerificationEmailParams {
   email: string;
@@ -23,54 +46,68 @@ export const emailService = {
     code,
     name,
   }: SendVerificationEmailParams) {
+    console.log('📧 === SENDING VERIFICATION EMAIL ===');
+    console.log('To:', email);
+    console.log('Code:', code);
+    console.log('Name:', name);
+
     try {
-      const { data, error } = await resend.emails.send({
-        from: `${process.env.FROM_NAME} <${process.env.FROM_EMAIL}>`,
-        to: [email],
+      const info = await transporter.sendMail({
+        from: `"Lynq" <${process.env.GMAIL_USER}>`, // Sender name and email
+        to: email, // Recipient - kisi ko bhi bhej sakte hain! ✅
         subject: 'Verify your Lynq account',
         html: getVerificationEmailHTML(name, code, email),
+        // Optional: Plain text version
+        text: `Hi ${name}!\n\nYour verification code is: ${code}\n\nThis code expires in 10 minutes.\n\nBest regards,\nLynq Team`,
       });
 
-      if (error) {
-        console.error('Email send error:', error);
-        throw new Error('Failed to send verification email');
-      }
+      console.log('✅ Email sent successfully!');
+      console.log('Message ID:', info.messageId);
+      console.log('Response:', info.response);
 
-      return data;
-    } catch (error) {
-      console.error('Email service error:', error);
-      throw error;
+      return info;
+    } catch (error: any) {
+      console.error('❌ Failed to send email:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        command: error.command,
+      });
+      throw new Error('Failed to send verification email');
     }
   },
 };
 
+// Beautiful Email Template
 // Beautiful Email Template
 function getVerificationEmailHTML(
   name: string,
   code: string,
   email: string
 ): string {
-  const verificationUrl = `${
-    process.env.FRONTEND_URL
-  }/verify?email=${encodeURIComponent(email)}&code=${code}`;
-
   return `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Verify Your Email</title>
+      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+      <title>Verify Your Lynq Account</title>
       <style>
-        body {
+        * {
           margin: 0;
           padding: 0;
+          box-sizing: border-box;
+        }
+        body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          padding: 20px;
+          line-height: 1.6;
         }
-        .container {
+        .email-container {
           max-width: 600px;
-          margin: 40px auto;
+          margin: 0 auto;
           background: white;
           border-radius: 16px;
           overflow: hidden;
@@ -86,22 +123,29 @@ function getVerificationEmailHTML(
           margin: 0;
           font-size: 32px;
           font-weight: 700;
+          letter-spacing: 1px;
+        }
+        .header p {
+          color: rgba(255, 255, 255, 0.9);
+          margin-top: 10px;
+          font-size: 14px;
         }
         .content {
           padding: 40px 30px;
         }
         .greeting {
-          font-size: 18px;
+          font-size: 20px;
           color: #333;
           margin-bottom: 20px;
+          font-weight: 600;
         }
         .message {
           font-size: 16px;
           color: #666;
-          line-height: 1.6;
+          line-height: 1.8;
           margin-bottom: 30px;
         }
-        .code-container {
+        .code-section {
           background: #f7f7f7;
           border: 2px dashed #667eea;
           border-radius: 12px;
@@ -112,39 +156,33 @@ function getVerificationEmailHTML(
         .code-label {
           font-size: 14px;
           color: #666;
-          margin-bottom: 10px;
+          margin-bottom: 15px;
           text-transform: uppercase;
-          letter-spacing: 1px;
+          letter-spacing: 1.5px;
+          font-weight: 600;
         }
         .code {
-          font-size: 36px;
+          font-size: 40px;
           font-weight: 700;
           color: #667eea;
-          letter-spacing: 8px;
-          font-family: 'Courier New', monospace;
+          letter-spacing: 10px;
+          font-family: 'Courier New', Courier, monospace;
+          padding: 10px;
         }
-        .button-container {
-          text-align: center;
-          margin: 30px 0;
-        }
-        .verify-button {
-          display: inline-block;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 16px 40px;
+        .expires-notice {
+          margin-top: 30px;
+          padding: 20px;
+          background: #fff3cd;
+          border-left: 4px solid #ffc107;
           border-radius: 8px;
-          text-decoration: none;
-          font-weight: 600;
-          font-size: 16px;
-          transition: transform 0.2s;
         }
-        .verify-button:hover {
-          transform: translateY(-2px);
+        .expires-notice strong {
+          color: #856404;
+          font-size: 15px;
         }
-        .divider {
-          text-align: center;
-          margin: 30px 0;
-          color: #999;
+        .expires-notice p {
+          margin: 5px 0 0 0;
+          color: #856404;
           font-size: 14px;
         }
         .footer {
@@ -154,69 +192,98 @@ function getVerificationEmailHTML(
           font-size: 14px;
           color: #666;
         }
+        .footer strong {
+          color: #333;
+          font-size: 16px;
+        }
+        .footer p {
+          margin: 10px 0;
+        }
         .footer a {
           color: #667eea;
           text-decoration: none;
         }
-        .expires {
-          margin-top: 20px;
-          padding: 15px;
-          background: #fff3cd;
-          border-radius: 8px;
-          font-size: 14px;
-          color: #856404;
+        .footer a:hover {
+          text-decoration: underline;
+        }
+        .help-text {
+          margin-top: 30px;
+          padding-top: 20px;
+          border-top: 1px solid #eee;
+          font-size: 13px;
+          color: #999;
+          text-align: center;
+        }
+        @media only screen and (max-width: 600px) {
+          .email-container {
+            margin: 0;
+            border-radius: 0;
+          }
+          .header h1 {
+            font-size: 24px;
+          }
+          .code {
+            font-size: 32px;
+            letter-spacing: 6px;
+          }
+          .content {
+            padding: 30px 20px;
+          }
         }
       </style>
     </head>
     <body>
-      <div class="container">
+      <div class="email-container">
+        <!-- Header -->
         <div class="header">
           <h1>🔗 Lynq</h1>
+          <p>Where conversations flow naturally</p>
         </div>
         
+        <!-- Content -->
         <div class="content">
           <p class="greeting">Hi ${name}! 👋</p>
           
           <p class="message">
             Welcome to <strong>Lynq</strong>! We're excited to have you join our community. 
-            To complete your registration, please verify your email address.
+            To complete your registration and start connecting, please verify your email address.
           </p>
 
-          <div class="code-container">
+          <!-- Code Section -->
+          <div class="code-section">
             <div class="code-label">Your Verification Code</div>
             <div class="code">${code}</div>
           </div>
 
-          <p class="message" style="text-align: center;">
+          <p class="message" style="text-align: center; margin-bottom: 15px;">
             Enter this code in the app to verify your account
           </p>
 
-          <div class="divider">OR</div>
-
-          <div class="button-container">
-            <a href="${verificationUrl}" class="verify-button">
-              Verify Email Address
-            </a>
+          <!-- Expiry Notice -->
+          <div class="expires-notice">
+            <strong>Important:</strong>
+            <p>This verification code will expire in <strong>10 minutes</strong> for security reasons.</p>
           </div>
 
-          <div class="expires">
-            ⏱️ This code will expire in <strong>10 minutes</strong> for security reasons.
+          <!-- Help Text -->
+          <div class="help-text">
+            <p>
+              If you didn't create a Lynq account, please ignore this email or 
+              <a href="mailto:lynq.service@gmail.com">contact our support team</a> if you have concerns.
+            </p>
           </div>
-
-          <p class="message" style="margin-top: 30px; font-size: 14px;">
-            If you didn't create a Lynq account, please ignore this email or 
-            <a href="mailto:support@lynq.com" style="color: #667eea;">contact support</a> if you have concerns.
-          </p>
         </div>
 
+        <!-- Footer -->
         <div class="footer">
-          <p>
-            <strong>Lynq</strong> - Where conversations flow naturally<br>
+          <p><strong>Lynq</strong></p>
+          <p style="margin: 5px 0;">Where conversations flow naturally</p>
+          <p style="margin-top: 20px; color: #999;">
             © ${new Date().getFullYear()} Lynq. All rights reserved.
           </p>
           <p style="margin-top: 15px;">
-            <a href="${process.env.FRONTEND_URL}/terms">Terms of Service</a> • 
-            <a href="${process.env.FRONTEND_URL}/privacy">Privacy Policy</a>
+            Need help? Contact us at 
+            <a href="mailto:lynq.service@gmail.com">lynq.service@gmail.com</a>
           </p>
         </div>
       </div>
